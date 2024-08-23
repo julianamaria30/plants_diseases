@@ -1,0 +1,10 @@
+# Ignorar logs do TensorBoard
+logs/
+*.log
+
+# Ignorar arquivos .txt (incluindo o training_log.txt)
+*.txt
+
+# Ignorar checkpoints e arquivos de modelo
+*.h5
+*.ckpt
