@@ -13,28 +13,35 @@ batch_size = 32
 data_dir = "./leaveDataset"
 epochs = 25
 
-# Carregamento e divisão do dataset
+# Divisão de dataset para treino (70%), validação (15%) e teste (15%)
 train_data = tf.keras.preprocessing.image_dataset_from_directory(
     data_dir,
-    validation_split=0.2,
+    validation_split=0.3,  # 30% para validação e teste juntos
     subset="training",
     seed=123,
     image_size=(img_height, img_width),
     batch_size=batch_size
 )
 
-val_data = tf.keras.preprocessing.image_dataset_from_directory(
+val_and_test_data = tf.keras.preprocessing.image_dataset_from_directory(
     data_dir,
-    validation_split=0.2,
+    validation_split=0.3,
     subset="validation",
     seed=123,
     image_size=(img_height, img_width),
     batch_size=batch_size
 )
 
+# Separando validação (15%) e teste (15%) dos 30% restantes
+val_batches = int(0.5 * len(val_and_test_data))  # 50% dos 30% para validação
+
+val_data = val_and_test_data.take(val_batches)  # Pegando a primeira metade para validação
+test_data = val_and_test_data.skip(val_batches)  # Pegando a segunda metade para testes
+
 # Obter o número de classes (categorias)
 num_classes = len(train_data.class_names)
 print(f"Num classes: {num_classes}")
+print(train_data.class_names)
 
 # Construção do modelo CNN
 model = models.Sequential([
@@ -82,7 +89,7 @@ history = model.fit(
 )
 
 # Avaliação do modelo
-test_loss, test_acc = model.evaluate(val_data)
+test_loss, test_acc = model.evaluate(test_data)
 print(f"Test accuracy: {test_acc:.2f}")
 
 # Gráficos finais de acurácia e perda
@@ -106,7 +113,7 @@ plt.legend(loc='upper right')
 plt.title('Perda de Treinamento e Validação')
 plt.show()
 
-# Função para classificar uma imagem - Validação
+# Função para classificar uma imagem
 def classify_single_image(model, img_path, class_names):
     img = image.load_img(img_path, target_size=(img_height, img_width))
     img_array = image.img_to_array(img)
@@ -121,7 +128,39 @@ def classify_single_image(model, img_path, class_names):
 
     print(f"Classe prevista: {class_names[predicted_class[0]]}")
     print(f"Confiança: {predictions[0][predicted_class[0]]:.2f}")
+    return predicted_class[0], predictions[0][predicted_class[0]]
 
-# Teste com uma imagem específica
-image_path = "./leaveDataset/Raspberry___healthy/image (1000).JPG"
-classify_single_image(model, image_path, train_data.class_names)
+# Função para realizar testes com várias imagens
+def batch_classification(model, test_data, class_names):
+    correct_predictions = 0
+    total_confidence = 0.0
+    total_images = 0
+
+    for images, labels in test_data:
+        predictions = model.predict(images)
+        predicted_classes = np.argmax(predictions, axis=1)
+        
+        for i in range(len(images)):
+            total_confidence += predictions[i][predicted_classes[i]]
+            if predicted_classes[i] == labels[i]:
+                correct_predictions += 1
+            total_images += 1
+
+    if total_images == 0:
+        print("Nenhuma imagem foi encontrada no conjunto de teste.")
+        return
+
+    # Cálculo da precisão e confiança média
+    accuracy = correct_predictions / total_images
+    avg_confidence = total_confidence / total_images
+    
+    # Exibindo os resultados
+    print(f"\nPrecisão: {accuracy * 100:.2f}%")
+    print(f"Confiança média: {avg_confidence:.2f}")
+    print(f"Total de predições corretas: {correct_predictions}")
+    print(f"Total de imagens: {total_images}")
+    print(f"Confiança total acumulada: {total_confidence:.2f}")
+
+# Executar o teste batch
+batch_classification(model, test_data, train_data.class_names)
+
